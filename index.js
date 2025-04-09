@@ -23,11 +23,13 @@ await page.goto("https://www.kap.org.tr/tr/bist-sirketler");
 const stockArray = [];
 
 const stockNames = await page.$$eval(
-    "div.w-clearfix.w-inline-block.comp-row > div.comp-cell._04.vtable > a",
+    //"div.w-clearfix.w-inline-block.comp-row > div.comp-cell._04.vtable > a",
+    "#financialTable > tbody > tr > td.pl-4.py-1 > a",
     (stocks) => stocks.map((el) => el.textContent)
 );
 
-const paths = await page.$$eval("div._04 > a.vcell", (stocks) =>
+
+const paths = await page.$$eval("#financialTable > tbody > tr > td.pl-4.py-1 > a", (stocks) => 
     stocks.map((el) => el.getAttribute("href"))
 );
 
@@ -36,23 +38,25 @@ for (let i = 0; i < pathLength; i++) {
     const stock = {};
     stock.name = stockNames[i];
 
-    page.setDefaultTimeout(15000);
+    page.setDefaultTimeout(10000);
     try { await page.goto("https://www.kap.org.tr/" + paths[i]); } 
     catch (error) { console.log(stock.name); }
     
-    page.setDefaultTimeout(1000);
+    page.setDefaultTimeout(1500);
     try {
-        await page.$eval("a:nth-child(4) > div", (link) => link.click());
+        await page.$eval("#participation-tab", (link) => link.click());
 
         for (let j = 0; j < 7; j++) {
             const selector = await page
-                .locator(`tr:nth-child(${4+j}) > td:nth-child(2) > div`)
+                .locator(`#participation > div > div > div:nth-child(2) > div > div > div > div > div > div > table > tbody > tr:nth-child(${4+j}) > td.font-normal`)
                 .waitHandle();
             stock[`v${j+1}`] = await selector?.evaluate((el) => el.textContent.trim());
+            
         }
 
         stockArray.push(stock);
     } catch (error) {
+        console.log(`${i}- ${stock.name}`);
         continue;
     }
 }
