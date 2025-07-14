@@ -1,5 +1,6 @@
 import puppeteer from "puppeteer";
-import { writeToFile } from './workbook.js'
+import { writeToFile } from './workbook.js';
+import blockedStockes from "./blockedStockes.js";
 
 const hayir = "HAYIR";
 
@@ -35,29 +36,33 @@ const paths = await page.$$eval("#financialTable > tbody > tr > td.pl-4.py-1 > a
 
 const pathLength = paths.length;
 for (let i = 0; i < pathLength; i++) {
+    
     const stock = {};
     stock.name = stockNames[i];
 
-    page.setDefaultTimeout(10000);
-    try { await page.goto("https://www.kap.org.tr/" + paths[i]); } 
-    catch (error) { console.log(stock.name); }
-    
-    page.setDefaultTimeout(1500);
-    try {
-        await page.$eval("#participation-tab", (link) => link.click());
+    if(!blockedStockes.includes(stock.name))
+    {
+        page.setDefaultTimeout(10000);
+        try { await page.goto("https://www.kap.org.tr/" + paths[i]); } 
+        catch (error) { console.log(stock.name); }
+        
+        page.setDefaultTimeout(1500);
+        try {
+            await page.$eval("#participation-tab", (link) => link.click());
 
-        for (let j = 0; j < 7; j++) {
-            const selector = await page
-                .locator(`#participation > div > div > div:nth-child(2) > div > div > div > div > div > div > table > tbody > tr:nth-child(${4+j}) > td.font-normal`)
-                .waitHandle();
-            stock[`v${j+1}`] = await selector?.evaluate((el) => el.textContent.trim());
-            
+            for (let j = 0; j < 7; j++) {
+                const selector = await page
+                    .locator(`#participation > div > div > div:nth-child(2) > div > div > div > div > div > div > table > tbody > tr:nth-child(${4+j}) > td.font-normal`)
+                    .waitHandle();
+                stock[`v${j+1}`] = await selector?.evaluate((el) => el.textContent.trim());
+                
+            }
+
+            stockArray.push(stock);
+        } catch (error) {
+            console.log(`${i}- ${stock.name}`);
+            continue;
         }
-
-        stockArray.push(stock);
-    } catch (error) {
-        console.log(`${i}- ${stock.name}`);
-        continue;
     }
 }
 
