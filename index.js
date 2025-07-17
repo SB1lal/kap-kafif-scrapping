@@ -1,6 +1,6 @@
 import puppeteer from "puppeteer";
 import { writeToFile } from './workbook.js';
-import blockedStockes from "./blockedStockes.js";
+import { blockedStockSet } from "./blockedStockes.js";
 
 const hayir = "HAYIR";
 
@@ -40,7 +40,7 @@ for (let i = 0; i < pathLength; i++) {
     const stock = {};
     stock.name = stockNames[i];
 
-    if(!blockedStockes.includes(stock.name))
+    if(!blockedStockSet.has(stock.name))
     {
         page.setDefaultTimeout(10000);
         try { await page.goto("https://www.kap.org.tr/" + paths[i]); } 
