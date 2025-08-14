@@ -3,75 +3,73 @@ import { writeToFile } from './workbook.js';
 import { blockedStockSet } from "./blockedStockes.js";
 
 const hayir = "HAYIR";
+const MAX_CONCURRENCY = 5; // Limit open pages to avoid overwhelming the site
 
-const browserOptions = {
-    headless: true,
-    timeout: 1500,
-};
+const browser = await puppeteer.launch({ headless: true });
 
-// const viewportOptions = {
-//     width: 1280,
-//     height: 720,
-// };
+const mainPage = await browser.newPage();
+await mainPage.setDefaultTimeout(1500);
+await mainPage.setDefaultNavigationTimeout(1500);
 
-const browser = await puppeteer.launch(browserOptions);
-const page = await browser.newPage();
+await mainPage.goto("https://www.kap.org.tr/tr/bist-sirketler");
 
-// await page.setViewport(viewportOptions);
+const stockNames = await mainPage.$$eval(
+    "#financialTable > tbody > tr > td.pl-4.py-1 > a",
+    stocks => stocks.map(el => el.textContent.trim())
+);
 
-await page.goto("https://www.kap.org.tr/tr/bist-sirketler");
+const paths = await mainPage.$$eval(
+    "#financialTable > tbody > tr > td.pl-4.py-1 > a",
+    stocks => stocks.map(el => el.getAttribute("href"))
+);
+
+await mainPage.close();
+
+// Filter out blocked stocks
+const stocksToProcess = stockNames
+    .map((name, i) => ({ name, path: paths[i] }))
+    .filter(stock => !blockedStockSet.has(stock.name));
 
 const stockArray = [];
 
-const stockNames = await page.$$eval(
-    //"div.w-clearfix.w-inline-block.comp-row > div.comp-cell._04.vtable > a",
-    "#financialTable > tbody > tr > td.pl-4.py-1 > a",
-    (stocks) => stocks.map((el) => el.textContent)
-);
+async function scrapeStock(stock) {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(1500);
+    page.setDefaultNavigationTimeout(10000);
 
+    try {
+        await page.goto("https://www.kap.org.tr/" + stock.path);
 
-const paths = await page.$$eval("#financialTable > tbody > tr > td.pl-4.py-1 > a", (stocks) => 
-    stocks.map((el) => el.getAttribute("href"))
-);
+        await page.click("#participation-tab");
 
-const pathLength = paths.length;
-for (let i = 0; i < pathLength; i++) {
-    
-    const stock = {};
-    stock.name = stockNames[i];
-
-    if(!blockedStockSet.has(stock.name))
-    {
-        page.setDefaultTimeout(10000);
-        try { await page.goto("https://www.kap.org.tr/" + paths[i]); } 
-        catch (error) { console.log(stock.name); }
-        
-        page.setDefaultTimeout(1500);
-        try {
-            await page.$eval("#participation-tab", (link) => link.click());
-
-            for (let j = 0; j < 7; j++) {
-                const selector = await page
-                    .locator(`#participation > div > div > div:nth-child(2) > div > div > div > div > div > div > table > tbody > tr:nth-child(${4+j}) > td.font-normal`)
-                    .waitHandle();
-                stock[`v${j+1}`] = await selector?.evaluate((el) => el.textContent.trim());
-                
-            }
-
-            stockArray.push(stock);
-        } catch (error) {
-            console.log(`${i}- ${stock.name}`);
-            continue;
+        for (let j = 0; j < 7; j++) {
+            const selector = `#participation > div > div > div:nth-child(2) > div > div > div > div > div > div > table > tbody > tr:nth-child(${4+j}) > td.font-normal`;
+            await page.waitForSelector(selector, { timeout: 1500 });
+            stock[`v${j+1}`] = await page.$eval(selector, el => el.textContent.trim());
         }
+
+        stockArray.push(stock);
+    } catch (error) {
+        console.log(`❌ Failed: ${stock.name}`);
+    } finally {
+        await page.close();
     }
 }
 
-const zeroRateStocks = stockArray.filter((stock) => {
-    return (stock.v1.localeCompare(hayir, "tr", { sensitivity: "base" }) === 0 &&
-                stock.v2.localeCompare(hayir, "tr", { sensitivity: "base" }) === 0 &&
-                    stock.v3.localeCompare(hayir, "tr", { sensitivity: "base" }) === 0 &&
-                        stock.v4.localeCompare(hayir, "tr", { sensitivity: "base" }) === 0 &&
-                            stock.v5 === '0')})
+// Run tasks in batches to avoid too many tabs
+for (let i = 0; i < stocksToProcess.length; i += MAX_CONCURRENCY) {
+    const batch = stocksToProcess.slice(i, i + MAX_CONCURRENCY);
+    await Promise.all(batch.map(scrapeStock));
+}
+
+// Filter stocks with all "HAYIR" and v5 === '0'
+const zeroRateStocks = stockArray.filter(stock =>
+    stock.v1.localeCompare(hayir, "tr", { sensitivity: "base" }) === 0 &&
+    stock.v2.localeCompare(hayir, "tr", { sensitivity: "base" }) === 0 &&
+    stock.v3.localeCompare(hayir, "tr", { sensitivity: "base" }) === 0 &&
+    stock.v4.localeCompare(hayir, "tr", { sensitivity: "base" }) === 0 &&
+    stock.v5 === '0'
+);
 
 writeToFile(zeroRateStocks);
 await browser.close();
