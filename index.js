@@ -1,9 +1,9 @@
 import puppeteer from "puppeteer";
 import { writeToFile } from './workbook.js';
 import { blockedStockSet } from "./blockedStockes.js";
-
+console.time();
 const hayir = "HAYIR";
-const MAX_CONCURRENCY = 5; // Limit open pages to avoid overwhelming the site
+const MAX_CONCURRENCY = 100; // Limit open pages to avoid overwhelming the site
 
 const browser = await puppeteer.launch({ headless: true });
 
@@ -33,9 +33,10 @@ const stocksToProcess = stockNames
 const stockArray = [];
 
 async function scrapeStock(stock) {
+    
     const page = await browser.newPage();
     page.setDefaultTimeout(1500);
-    page.setDefaultNavigationTimeout(10000);
+    page.setDefaultNavigationTimeout(8000);
 
     try {
         await page.goto("https://www.kap.org.tr/" + stock.path);
@@ -72,4 +73,5 @@ const zeroRateStocks = stockArray.filter(stock =>
 );
 
 writeToFile(zeroRateStocks);
+console.timeEnd();
 await browser.close();
