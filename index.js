@@ -2,6 +2,7 @@ import puppeteer from "puppeteer";
 import { writeToFile } from './workbook.js';
 import { blockedStockSet } from "./blockedStockes.js";
 
+console.time();
 const hayir = "HAYIR";
 
 const browser = await puppeteer.launch({
@@ -31,7 +32,7 @@ for (let i = 0; i < paths.length; i++) {
 
     if (!blockedStockSet.has(stock.name)) {
         try {
-            await page.goto("https://www.kap.org.tr/" + paths[i], { timeout: 10000 });
+            await page.goto("https://www.kap.org.tr/" + paths[i], { timeout: 8000 });
         } catch {
             console.log(stock.name);
             continue;
@@ -63,4 +64,5 @@ const zeroRateStocks = stockArray.filter(stock =>
 );
 
 writeToFile(zeroRateStocks);
+console.timeEnd();
 await browser.close();
